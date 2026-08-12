@@ -14,6 +14,8 @@ interface BookingItem {
   advertiser_name: string;
   created_at: string;
   has_creative: number;
+  pub_dates: string | null;
+  pending_dates: number;
 }
 
 export function PubBookingsPage() {
@@ -47,8 +49,14 @@ export function PubBookingsPage() {
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-ink-900">{b.package_title}</p>
                     {b.has_creative ? <Badge tone="green">Creative ready</Badge> : <Badge tone="amber">Creative pending</Badge>}
+                    {(b.pending_dates ?? 0) > 0 && <Badge tone="amber">{b.pending_dates} date(s) awaiting approval</Badge>}
                   </div>
                   <p className="mt-0.5 text-xs text-ink-400">{b.advertiser_name} · {b.campaign_name} · {formatDateTime(b.created_at)}</p>
+                  {b.pub_dates && (
+                    <p className="mt-1 text-xs text-brand-700">
+                      <span className="font-semibold">Requested dates:</span> {b.pub_dates}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-ink-900">{formatMoney(b.amount)}</span>

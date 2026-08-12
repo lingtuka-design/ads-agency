@@ -245,16 +245,16 @@ uploadRoutes.get("/:key{.*}", async (c) => {
         `SELECT b.id FROM creative_versions cv
          JOIN creatives cr ON cr.id = cv.creative_id
          JOIN bookings b ON b.id = cr.booking_id
-         WHERE cv.file_url LIKE ?`,
+         WHERE instr(cv.file_url, ?) > 0`,
       )
-        .bind(`%${key}%`)
+        .bind(key)
         .first<{ id: string }>();
       if (!party) {
         const viaLinks = await c.env.DB.prepare(
           `SELECT b.id FROM creatives cr JOIN bookings b ON b.id = cr.booking_id
-           WHERE cr.drive_links LIKE ?`,
+           WHERE instr(coalesce(cr.drive_links,''), ?) > 0`,
         )
-          .bind(`%${key}%`)
+          .bind(key)
           .first<{ id: string }>();
         const bookingParty = party ?? viaLinks;
         if (!bookingParty) throw new ApiError(403, "FORBIDDEN", "You do not have access to this file.");

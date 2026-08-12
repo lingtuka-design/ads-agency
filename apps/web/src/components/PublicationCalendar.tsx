@@ -27,8 +27,8 @@ const STATUS_STYLES: Record<PublicationSlot["status"], string> = {
 };
 
 const STATUS_LABEL: Record<PublicationSlot["status"], string> = {
-  PROPOSED: "Requested by advertiser",
-  APPROVED: "Approved by publisher",
+  PROPOSED: "Awaiting publisher approval",
+  APPROVED: "Approved publication date",
   ADJUSTED: "Adjusted by publisher — awaiting your OK",
   REJECTED: "Not available on this date",
   PUBLISHED: "Published",
@@ -136,7 +136,8 @@ export function PublicationCalendar({
   }
 
   const monthLabel = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
-  const canPropose = role === "advertiser" || role === "admin";
+  const canPropose = role === "advertiser" || role === "publisher" || role === "admin";
+  const isPublisher = role === "publisher";
 
   return (
     <div>
@@ -203,7 +204,7 @@ export function PublicationCalendar({
       {canPropose && (
         <div className="mt-4">
           <Button size="sm" variant="outline" onClick={() => openDialog()}>
-            + Request a publication date
+            {isPublisher ? "+ Assign a publication date" : "+ Request a publication date"}
           </Button>
         </div>
       )}
@@ -272,8 +273,8 @@ export function PublicationCalendar({
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </Dialog>
 
-      {/* Adjust / propose dialog — reused by both parties */}
-      <Dialog open={proposeOpen} onClose={() => setProposeOpen(false)} title="Publication date">
+      {/* Assign / propose dialog — advertisers request, publishers assign */}
+      <Dialog open={proposeOpen} onClose={() => setProposeOpen(false)} title={isPublisher ? "Assign publication date" : "Publication date"}>
         <div className="space-y-4">
           <Field label="Date" required>
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
@@ -282,13 +283,13 @@ export function PublicationCalendar({
             <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
           </Field>
           <Field label="Note">
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Best time for our audience is 6pm" />
+            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={isPublisher ? "e.g. Slot confirmed — ad goes live 6pm" : "e.g. Best time for our audience is 6pm"} />
           </Field>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setProposeOpen(false)}>Cancel</Button>
             <Button loading={propose.isPending || act.isPending} disabled={!newDate} onClick={confirmDialog}>
-              {adjustSlotId ? "Propose adjusted date" : role === "advertiser" ? "Request this date" : "Propose this date"}
+              {adjustSlotId ? "Propose adjusted date" : isPublisher ? "Assign this date" : "Request this date"}
             </Button>
           </div>
         </div>

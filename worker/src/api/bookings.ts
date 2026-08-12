@@ -355,24 +355,27 @@ bookingRoutes.get("/:id/slots", async (c) => {
   return c.json(rows.results);
 });
 
-// Advertiser proposes their preferred publication dates
+// Advertiser proposes their preferred publication dates; publishers may also assign dates
 bookingRoutes.post("/:id/slots", async (c) => {
   const user = me(c);
   const booking = await loadBooking(c.env, idParam(c));
   if (!booking) throw new ApiError(404, "BOOKING_NOT_FOUND", "Booking not found.");
   requireBookingActor(user, booking);
-  if (user.role !== "advertiser") {
-    throw new ApiError(403, "FORBIDDEN", "Only advertisers propose publication dates.");
+  if (user.role !== "advertiser" && user.role !== "publisher" && user.role !== "admin") {
+    throw new ApiError(403, "FORBIDDEN", "Not allowed.");
   }
   const input = await jsonBody(proposeSlotsSchema, c);
   const ts = nowIso();
+  // Publisher/admin-assigned dates are confirmed immediately (they set availability);
+  // advertiser requests stay PROPOSED until the publisher approves.
+  const status = user.role === "advertiser" ? "PROPOSED" : "APPROVED";
   await c.env.DB.batch(
     input.slots.map((s) =>
       c.env.DB.prepare(
         `INSERT INTO publication_slots (id, booking_id, slot_date, slot_time, status, proposed_by, note, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'PROPOSED', 'advertiser', ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-        .bind(crypto.randomUUID(), booking.id, s.date, s.time ?? null, s.note ?? null, ts, ts),
+        .bind(crypto.randomUUID(), booking.id, s.date, s.time ?? null, status, user.role, s.note ?? null, ts, ts),
     ),
   );
   await audit(c.env, { user_id: user.id, action: "SLOTS_PROPOSED", entity: "booking", entity_id: booking.id, new_value: JSON.stringify(input.slots.map((s) => s.date)) });

@@ -376,7 +376,11 @@ publisherRoutes.get("/me/bookings", async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT b.id, b.status, b.amount, b.currency, b.scheduled_start, b.scheduled_end, b.created_at,
             p.title AS package_title, c.name AS campaign_name, u.name AS advertiser_name,
-            (SELECT COUNT(*) FROM creatives cr WHERE cr.booking_id = b.id) AS has_creative
+            (SELECT COUNT(*) FROM creatives cr WHERE cr.booking_id = b.id) AS has_creative,
+            (SELECT group_concat(slot_date || ' ' || COALESCE(slot_time, ''), ', ')
+             FROM publication_slots ps WHERE ps.booking_id = b.id AND ps.status IN ('PROPOSED','APPROVED','ADJUSTED')
+             ORDER BY ps.slot_date) AS pub_dates,
+            (SELECT COUNT(*) FROM publication_slots ps WHERE ps.booking_id = b.id AND ps.status = 'PROPOSED') AS pending_dates
      FROM bookings b
      JOIN ad_packages p ON p.id = b.package_id
      JOIN campaigns c ON c.id = b.campaign_id
