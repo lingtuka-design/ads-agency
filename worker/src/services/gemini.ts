@@ -163,7 +163,7 @@ export async function fetchMatches(env: Env, filters: ParsedFilters): Promise<Ma
 
 export async function runGemini(env: Env, request: GeminiRequest): Promise<GeminiResponse> {
   const key = env.GEMINI_API_KEY;
-  const model = env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  const model = env.GEMINI_MODEL ?? "gemini-1.5-flash";
   if (!key) {
     return { text: "", usedFallback: true };
   }

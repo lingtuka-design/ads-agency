@@ -34,7 +34,8 @@
   ],
   "vars": {
     "APP_NAME": "Ad Agency Marketplace",
-    "AUDIT_ENABLED": "true"
+    "AUDIT_ENABLED": "true",
+    "GEMINI_MODEL": "gemini-1.5-flash"
   },
   "triggers": {
     "crons": ["*/15 * * * *"]
