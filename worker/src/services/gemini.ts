@@ -150,10 +150,6 @@ export async function fetchMatches(env: Env, filters: ParsedFilters): Promise<Ma
     clauses.push(`p.platform IN (${filters.platforms.map(() => "?").join(",")})`);
     params.push(...filters.platforms);
   }
-  if (filters.location) {
-    clauses.push(`s.audience_location IS NOT NULL AND LOWER(s.audience_location) LIKE ?`);
-    params.push(`%${filters.location.toLowerCase()}%`);
-  }
   const where = clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
   const rows = await env.DB.prepare(`${base}${where} ORDER BY p.price ASC LIMIT 50`).bind(...params).all<
     Omit<MatchCandidate, "primaryAgeGroup" | "audienceLocation"> & { primaryAgeGroup: string | null; audienceLocation: string | null }
@@ -163,7 +159,7 @@ export async function fetchMatches(env: Env, filters: ParsedFilters): Promise<Ma
 
 export async function runGemini(env: Env, request: GeminiRequest): Promise<GeminiResponse> {
   const key = env.GEMINI_API_KEY;
-  const model = env.GEMINI_MODEL ?? "gemini-1.5-flash";
+  const model = env.GEMINI_MODEL ?? "gemini-flash-latest";
   if (!key) {
     return { text: "", usedFallback: true };
   }

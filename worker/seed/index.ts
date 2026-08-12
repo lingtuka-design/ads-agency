@@ -147,7 +147,7 @@ async function main() {
   console.log("Seeding demo data against", BASE);
 
   // 1. Bootstrap + login admin
-  await api("/api/auth/bootstrap", { method: "POST" });
+  await api("/api/auth/bootstrap", { method: "POST" }).catch(() => null);
   adminCookie = await loginAs("lingtuka", "MAWLA1984@mala");
   console.log("[admin] logged in");
 
