@@ -26,7 +26,16 @@ export function LoginPage() {
         navigate({ to: "/register" });
         return;
       }
-      const target = (search.redirect as string) ?? (res.user.role === "admin" ? "/admin" : res.user.role === "publisher" ? "/publisher/dashboard" : "/advertiser/dashboard");
+      // Advertisers get sent back to the page they wanted (e.g. a booking)
+      if (res.user.role === "advertiser" && typeof search.redirect === "string" && search.redirect) {
+        const [path, query] = search.redirect.split("?");
+        const params = new URLSearchParams(query ?? "");
+        const s: Record<string, unknown> = {};
+        params.forEach((v, k) => (s[k] = v));
+        navigate({ to: path as never, search: s as never });
+        return;
+      }
+      const target = res.user.role === "admin" ? "/admin" : res.user.role === "publisher" ? "/publisher/dashboard" : "/advertiser/dashboard";
       navigate({ to: target as never });
     } catch (e) {
       setError(apiErrorMessage(e));

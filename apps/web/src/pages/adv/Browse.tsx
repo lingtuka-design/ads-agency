@@ -66,6 +66,19 @@ export function AdvBrowsePage() {
     queryFn: () => api.get<Pkg[]>(`/api/public/packages?pageSize=100`),
   });
 
+  // Auto-open the booking modal when arriving with ?pkg=<id> (e.g. "Book Now" on a publisher profile)
+  const [pendingPkgId, setPendingPkgId] = useState<string | null>(
+    typeof search.pkg === "string" ? search.pkg : null,
+  );
+  useEffect(() => {
+    if (!pendingPkgId || !packages) return;
+    const found = (Array.isArray(packages) ? packages : []).find((p) => p.id === pendingPkgId);
+    if (found) {
+      setBookPkg(found);
+      setPendingPkgId(null);
+    }
+  }, [pendingPkgId, packages]);
+
   return (
     <div className="space-y-6">
       <div>

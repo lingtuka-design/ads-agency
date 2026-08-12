@@ -109,7 +109,8 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
       if (!res) return;
       setStep(1);
     } else if (step === 1) {
-      await checkout.mutateAsync().catch((e) => { setError(apiErrorMessage(e)); return null; });
+      const res = await checkout.mutateAsync().catch((e) => { setError(apiErrorMessage(e)); return null; });
+      if (!res) return;
       setStep(2);
     }
   }

@@ -198,11 +198,22 @@ export function PublisherProfilePage() {
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(100, pct)}%` }} />
                 </div>
                 <div className="mt-4 flex-1" />
-                <Link to={isAdvertiser ? "/advertiser/publishers" : "/publishers/$slug"} params={isAdvertiser ? {} : { slug: p.slug }} search={isAdvertiser ? { pkg: pkg.id } : { pkg: pkg.id }}>
-                  <Button className="w-full" disabled={soldOut} variant={soldOut ? "outline" : "primary"}>
-                    {soldOut ? "Sold Out" : "Book Now"}
-                  </Button>
-                </Link>
+                {isAdvertiser ? (
+                  <Link to="/advertiser/publishers" search={{ pkg: pkg.id }}>
+                    <Button className="w-full" disabled={soldOut} variant={soldOut ? "outline" : "primary"}>
+                      {soldOut ? "Sold Out" : "Book Now"}
+                    </Button>
+                  </Link>
+                ) : (
+                  <a
+                    href={`/login?redirect=${encodeURIComponent(`/advertiser/publishers?pkg=${pkg.id}`)}`}
+                    className={soldOut ? "pointer-events-none" : undefined}
+                  >
+                    <Button className="w-full" disabled={soldOut} variant={soldOut ? "outline" : "primary"}>
+                      {soldOut ? "Sold Out" : "Log in to Book"}
+                    </Button>
+                  </a>
+                )}
               </Card>
             );
           })}
