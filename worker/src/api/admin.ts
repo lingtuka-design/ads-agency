@@ -391,6 +391,44 @@ adminRoutes.post("/creative-jobs/:id/assign", async (c) => {
   return c.json({ ok: true });
 });
 
+// ---------- Demo data reset (seed tooling only) ----------
+
+adminRoutes.post("/db/reset-demo", async (c) => {
+  const user = me(c);
+  if (user.staff_role !== "SUPER_ADMIN") {
+    throw new ApiError(403, "FORBIDDEN", "Only the Super Admin can reset demo data.");
+  }
+  const input = await jsonBody(
+    z.object({
+      statements: z.array(z.string().max(300)).min(1).max(60),
+    }),
+    c,
+  );
+  // Safety: only allow plain DELETE FROM <known-table> statements.
+  const allowedTables = new Set([
+    "settlement_items", "settlements", "disputes", "reviews", "publisher_reviews_aggregate",
+    "creative_versions", "creatives", "booking_status_history", "bookings",
+    "invoices", "payments", "payment_events", "campaigns", "favorites",
+    "messages", "ad_packages", "publisher_stats", "publisher_payout_info",
+    "publishers", "advertisers", "notifications", "audit_logs", "sessions", "users",
+  ]);
+  for (const stmt of input.statements) {
+    const m = /^DELETE FROM (\w+)( WHERE [\w\s()=,'?]+)?;$/.exec(stmt.trim());
+    if (!m || !allowedTables.has(m[1])) {
+      throw new ApiError(400, "INVALID_STATEMENT", `Rejected unsafe reset statement: ${stmt.slice(0, 80)}`);
+    }
+  }
+  await c.env.DB.batch(input.statements.map((s) => c.env.DB.prepare(s)));
+  await audit(c.env, {
+    user_id: user.id,
+    action: "DEMO_DATA_RESET",
+    entity: "database",
+    new_value: `deleted ${input.statements.length} statement(s)`,
+    ip: c.req.header("CF-Connecting-IP") ?? null,
+  });
+  return c.json({ ok: true, statements: input.statements.length });
+});
+
 // ---------- Publisher payable (for settlement creation) ----------
 
 adminRoutes.get("/payable/:id", async (c) => {

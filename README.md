@@ -40,11 +40,13 @@ PAYMENT_PROVIDER=manual
 
 ### Demo accounts (after `npm run db:seed`)
 
-| Role      | Email / username              | Password  |
-| --------- | ----------------------------- | --------- |
-| Admin     | `lingtuka`                    | `MAWLA1984@mala` |
-| Advertiser| `demo.advertiser@agency.test` | `demo1234` |
-| Publishers| `demo.influencer@agency.test`, `demo.youtube@agency.test`, `demo.news@agency.test`, `demo.paper@agency.test`, `demo.fb@agency.test` | `demo1234` |
+Every demo account uses the password **`demo1234`**.
+
+| Role      | Login (email)            |
+| --------- | ------------------------ |
+| Admin     | `lingtuka` (password `MAWLA1984@mala`) |
+| Advertisers | `adidas@agency.test` · `musicinn@agency.test` · `kimkim@agency.test` · `orient@agency.test` |
+| Publishers | `vanglaini@agency.test` (Vanglaini) · `zonet@agency.test` (Zonet) · `lps@agency.test` (LPS) · `inkhel@agency.test` (inkhel) · `zirapc@agency.test` (ZiraPC) · `zofooty@agency.test` (Zofooty) · `aizawlpost@agency.test` (Aizawl Post) |
 
 ## Testing
 
