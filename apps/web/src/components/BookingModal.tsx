@@ -37,6 +37,7 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
     start: defaultDates?.start ?? new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
     end: defaultDates?.end ?? new Date(Date.now() + 37 * 86400000).toISOString().slice(0, 10),
     instructions: "",
+    preferredDates: "",
   });
   const [file, setFile] = useState<File | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
@@ -70,6 +71,17 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
       });
       const ids = res.bookings.map((b) => b.booking_id);
       if (ids.length > 0) setBookingId(ids[0]);
+
+      // Preferred publication dates → requested slots on the shared calendar
+      const dates = form.preferredDates
+        .split(/[\s,]+/)
+        .map((d) => d.trim())
+        .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+      if (dates.length > 0 && ids[0]) {
+        await api.post(`/api/bookings/${ids[0]}/slots`, {
+          slots: dates.map((date) => ({ date })),
+        });
+      }
 
       // 2. Auto-confirm booking (no payment required)
       const chk = await api.post<{ client_payload: { ref: string } }>("/api/payments/checkout", {
@@ -122,6 +134,10 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
               <Input type="date" value={form.end} onChange={set("end")} />
             </Field>
           </div>
+
+          <Field label="Preferred publication dates (optional)" hint="Comma-separated dates like 2026-09-10, 2026-09-12 — the publisher approves or adjusts them on the calendar">
+            <Input value={form.preferredDates} onChange={set("preferredDates")} placeholder="2026-09-10, 2026-09-12, 2026-09-15" />
+          </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Product / service (optional)">

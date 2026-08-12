@@ -32,6 +32,26 @@ const transitionSchema = z.object({
   note: z.string().max(1000).optional().nullable(),
 });
 
+const proposeSlotsSchema = z.object({
+  slots: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        time: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        note: z.string().max(500).optional().nullable(),
+      }),
+    )
+    .min(1)
+    .max(60),
+});
+
+const slotActionSchema = z.object({
+  status: z.enum(["APPROVED", "ADJUSTED", "REJECTED", "PROPOSED"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  time: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  note: z.string().max(500).optional().nullable(),
+});
+
 export const bookingRoutes = new Hono<AppBindings>();
 bookingRoutes.use("*", requireAuth);
 
@@ -318,6 +338,111 @@ bookingRoutes.get("/:id", async (c) => {
     .bind(booking.id)
     .first();
   return c.json({ booking, history: history.results, creative, payment });
+});
+
+// ---------- Publication date scheduling (advertiser proposes → publisher approves/adjusts) ----------
+
+bookingRoutes.get("/:id/slots", async (c) => {
+  const user = me(c);
+  const booking = await loadBooking(c.env, idParam(c));
+  if (!booking) throw new ApiError(404, "BOOKING_NOT_FOUND", "Booking not found.");
+  requireBookingActor(user, booking);
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM publication_slots WHERE booking_id = ? ORDER BY slot_date ASC, slot_time ASC`,
+  )
+    .bind(booking.id)
+    .all();
+  return c.json(rows.results);
+});
+
+// Advertiser proposes their preferred publication dates
+bookingRoutes.post("/:id/slots", async (c) => {
+  const user = me(c);
+  const booking = await loadBooking(c.env, idParam(c));
+  if (!booking) throw new ApiError(404, "BOOKING_NOT_FOUND", "Booking not found.");
+  requireBookingActor(user, booking);
+  if (user.role !== "advertiser") {
+    throw new ApiError(403, "FORBIDDEN", "Only advertisers propose publication dates.");
+  }
+  const input = await jsonBody(proposeSlotsSchema, c);
+  const ts = nowIso();
+  await c.env.DB.batch(
+    input.slots.map((s) =>
+      c.env.DB.prepare(
+        `INSERT INTO publication_slots (id, booking_id, slot_date, slot_time, status, proposed_by, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'PROPOSED', 'advertiser', ?, ?, ?)`,
+      )
+        .bind(crypto.randomUUID(), booking.id, s.date, s.time ?? null, s.note ?? null, ts, ts),
+    ),
+  );
+  await audit(c.env, { user_id: user.id, action: "SLOTS_PROPOSED", entity: "booking", entity_id: booking.id, new_value: JSON.stringify(input.slots.map((s) => s.date)) });
+  return c.json({ ok: true, count: input.slots.length });
+});
+
+// Publisher approves / adjusts / rejects a requested date; adjustments stay visible to the advertiser
+bookingRoutes.patch("/:id/slots/:slotId", async (c) => {
+  const user = me(c);
+  const booking = await loadBooking(c.env, idParam(c));
+  if (!booking) throw new ApiError(404, "BOOKING_NOT_FOUND", "Booking not found.");
+  requireBookingActor(user, booking);
+  const input = await jsonBody(slotActionSchema, c);
+  const slot = await c.env.DB.prepare(`SELECT * FROM publication_slots WHERE id = ? AND booking_id = ?`)
+    .bind(c.req.param("slotId"), booking.id)
+    .first<{ id: string; status: string; slot_date: string; slot_time: string | null }>();
+  if (!slot) throw new ApiError(404, "SLOT_NOT_FOUND", "Publication slot not found.");
+
+  const isAdvertiser = user.role === "advertiser";
+  const isPublisher = user.role === "publisher";
+
+  if (isAdvertiser) {
+    // Accept a publisher's adjusted date (→ APPROVED) or counter-propose (→ PROPOSED)
+    if (input.status !== "APPROVED" && input.status !== "PROPOSED") {
+      throw new ApiError(403, "FORBIDDEN", "Advertisers can only accept or counter-propose adjusted dates.");
+    }
+    if (input.status === "APPROVED" && slot.status !== "ADJUSTED") {
+      throw new ApiError(409, "INVALID_SLOT_STATE", "You can only accept a date the publisher has adjusted.");
+    }
+  } else if (isPublisher) {
+    if (input.status !== "APPROVED" && input.status !== "ADJUSTED" && input.status !== "REJECTED") {
+      throw new ApiError(403, "FORBIDDEN", "Publishers can approve, adjust or reject requested dates.");
+    }
+    if (input.status === "ADJUSTED" && !input.date) {
+      throw new ApiError(400, "DATE_REQUIRED", "Provide the adjusted date and time.");
+    }
+  } else if (user.role !== "admin") {
+    throw new ApiError(403, "FORBIDDEN", "Not allowed.");
+  }
+
+  const ts = nowIso();
+  await c.env.DB.prepare(
+    `UPDATE publication_slots
+     SET status = ?, slot_date = COALESCE(?, slot_date),
+         slot_time = CASE WHEN ? = 1 THEN ? ELSE slot_time END,
+         proposed_by = CASE WHEN ? IN ('advertiser','publisher') THEN ? ELSE proposed_by END,
+         note = COALESCE(?, note), updated_at = ?
+     WHERE id = ?`,
+  )
+    .bind(
+      input.status,
+      input.date ?? null,
+      input.time !== undefined ? 1 : 0,
+      input.time ?? null,
+      user.role,
+      user.role,
+      input.note ?? null,
+      ts,
+      slot.id,
+    )
+    .run();
+  await audit(c.env, {
+    user_id: user.id,
+    action: `SLOT_${input.status}`,
+    entity: "publication_slot",
+    entity_id: slot.id,
+    old_value: `${slot.slot_date}@${slot.status}`,
+    new_value: `${input.date ?? slot.slot_date}@${input.status}`,
+  });
+  return c.json({ ok: true });
 });
 
 // Status transitions with role-specific guards (spec Â§73, Â§74)

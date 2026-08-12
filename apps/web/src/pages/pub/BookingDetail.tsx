@@ -1,12 +1,32 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { ArrowLeft, Upload, FileText, Scale } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Upload, FileText, Scale, CalendarClock, Download, Link2 } from "lucide-react";
 import { api, uploadFile } from "../../lib/api";
-import { apiErrorMessage, formatMoney } from "../../lib/utils";
+import { apiErrorMessage, formatDateTime, formatMoney } from "../../lib/utils";
 import { Button, Card, CardBody, CardHeader, Dialog, EmptyState, PageLoader, StatusBadge } from "../../components/ui";
 import { CampaignTimeline } from "../../components/CampaignTimeline";
 import { Thread } from "../../components/Thread";
+import { PublicationCalendar } from "../../components/PublicationCalendar";
+
+interface CreativeVersion {
+  id: string;
+  version: number;
+  file_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  uploaded_by_name: string;
+  status: string;
+  comment: string | null;
+  created_at: string;
+}
+
+interface Creative {
+  id: string;
+  current_version: number;
+  status: string;
+  drive_links: string | null;
+}
 
 interface BookingDetail {
   id: string;
@@ -43,6 +63,25 @@ export function PubBookingDetailPage() {
       return res;
     },
   });
+
+  const { data: creativeData } = useQuery({
+    queryKey: ["pub", "creative", id],
+    queryFn: async () => {
+      const res = await api.get<{ creative: Creative | null; versions: CreativeVersion[] }>("/api/creatives/booking/" + id);
+      return res;
+    },
+  });
+
+  const driveLinks = useMemo(() => {
+    const raw = creativeData?.creative?.drive_links;
+    if (!raw) return [] as string[];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [] as string[];
+    } catch {
+      return [] as string[];
+    }
+  }, [creativeData?.creative?.drive_links]);
 
   const transition = useMutation({
     mutationFn: (to: string) => api.post(`/api/bookings/${id}/transition`, { to, note: `${to} by publisher` }),
@@ -127,6 +166,77 @@ export function PubBookingDetailPage() {
           <CardBody className="p-3"><Thread threadType="campaign" threadId={b.id} /></CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Publication dates"
+          subtitle="Approve the advertiser's requested dates, or adjust them to your availability — changes are visible to the advertiser instantly."
+          action={<CalendarClock className="h-4 w-4 text-ink-300" />}
+        />
+        <CardBody>
+          <PublicationCalendar bookingId={b.id} role="publisher" />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Creative materials"
+          subtitle="Download the advertiser's banners, flyers and video links, then publish them on the approved dates."
+          action={<Download className="h-4 w-4 text-ink-300" />}
+        />
+        <CardBody>
+          {!creativeData?.versions?.length && driveLinks.length === 0 ? (
+            <EmptyState
+              icon={<FileText className="h-6 w-6" />}
+              title="No creative submitted yet"
+              description="Once the advertiser uploads banners/flyers or adds video links, they appear here for download."
+            />
+          ) : (
+            <div className="space-y-4">
+              {(creativeData?.versions ?? []).length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Files</p>
+                  <div className="divide-y divide-ink-100 rounded-xl border border-ink-200">
+                    {creativeData!.versions.map((v) => (
+                      <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                            <FileText className="h-4 w-4 shrink-0 text-ink-400" />
+                            <span className="truncate">{v.file_name}</span>
+                          </p>
+                          <p className="mt-0.5 text-xs text-ink-400">
+                            v{v.version} · {v.uploaded_by_name} · {formatDateTime(v.created_at)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={v.status} />
+                          {v.file_url && (
+                            <a href={v.file_url} target="_blank" rel="noreferrer" className="rounded-lg bg-brand-50 p-2 text-brand-600 hover:bg-brand-100" title="Download">
+                              <Download className="h-4 w-4" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {driveLinks.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Video links</p>
+                  <div className="flex flex-wrap gap-2">
+                    {driveLinks.map((l, i) => (
+                      <a key={i} href={l} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100">
+                        <Link2 className="h-3.5 w-3.5" /> Video link {i + 1}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

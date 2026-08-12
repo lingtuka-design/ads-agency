@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Search, Sparkles, Images, ArrowRight, CreditCard, Wallet } from "lucide-react";
+import { Compass, Search, Sparkles, Images, ArrowRight, CreditCard, Wallet, Radio } from "lucide-react";
 import { api } from "../../lib/api";
 import { formatDate, formatMoney, titleCase } from "../../lib/utils";
 import { Badge, Card, CardBody, CardHeader, PageLoader, StatCard, StatusBadge, EmptyState, Button } from "../../components/ui";
@@ -26,6 +26,17 @@ interface PaymentItem {
   package_title: string;
 }
 
+interface LiveBooking {
+  id: string;
+  status: string;
+  package_title: string;
+  publisher_name: string;
+  platform: string;
+  campaign_name: string;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+}
+
 export function AdvDashboardPage() {
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ["adv", "campaigns"],
@@ -34,6 +45,11 @@ export function AdvDashboardPage() {
   const { data: payments } = useQuery({
     queryKey: ["adv", "payments"],
     queryFn: () => api.get<{ items: PaymentItem[] }>("/api/payments"),
+  });
+  const { data: liveBookings } = useQuery({
+    queryKey: ["adv", "live"],
+    queryFn: () => api.get<{ items: LiveBooking[] }>("/api/bookings?status=LIVE&pageSize=20"),
+    refetchInterval: 20_000,
   });
 
   if (isLoading) return <PageLoader />;
@@ -54,6 +70,31 @@ export function AdvDashboardPage() {
         <StatCard label="Bookings paid" value={(payments?.items ?? []).filter((p) => p.status === "SUCCESSFUL").length} sub="confirmed campaigns" icon={<Wallet className="h-5 w-5" />} tone="green" />
         <StatCard label="Quick action" value={<Link to="/advertiser/assistant"><Button size="sm" icon={<Sparkles className="h-4 w-4" />}>Ask the AI Assistant</Button></Link>} sub="find the perfect publisher" icon={<Sparkles className="h-5 w-5" />} tone="violet" />
       </div>
+
+      {(liveBookings?.items?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-600" />
+            </span>
+            <h2 className="text-base font-bold text-emerald-900">Your ads are running right now</h2>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {liveBookings!.items.map((lb) => (
+              <Link key={lb.id} to="/advertiser/bookings/$id" params={{ id: lb.id }} className="rounded-xl border border-emerald-200 bg-white p-4 transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <div className="flex items-center justify-between gap-2">
+                  <Radio className="h-4 w-4 text-emerald-600" />
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Live</span>
+                </div>
+                <p className="mt-2 font-semibold text-ink-900">{lb.package_title}</p>
+                <p className="text-xs text-ink-500">{lb.publisher_name} · {lb.platform}</p>
+                {lb.scheduled_end && <p className="mt-1 text-[11px] text-ink-400">running until {formatDate(lb.scheduled_end)}</p>}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

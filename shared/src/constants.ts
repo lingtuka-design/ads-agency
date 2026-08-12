@@ -138,6 +138,15 @@ export function canTransition(from: BookingStatus, to: BookingStatus): boolean {
   return BOOKING_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+export const PUBLICATION_SLOT_STATUS = [
+  "PROPOSED",
+  "APPROVED",
+  "ADJUSTED",
+  "REJECTED",
+  "PUBLISHED",
+] as const;
+export type PublicationSlotStatus = (typeof PUBLICATION_SLOT_STATUS)[number];
+
 export const CREATIVE_STATUS = [
   "DRAFT",
   "UPLOADED",

@@ -1,9 +1,10 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowLeft, Upload, FileText, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Upload, FileText, CheckCircle2, Link2 } from "lucide-react";
 import { api, uploadFile } from "../../lib/api";
 import { apiErrorMessage, formatDateTime, formatMoney, titleCase } from "../../lib/utils";
+import { useMemo } from "react";
 import { Button, Card, CardBody, CardHeader, Dialog, EmptyState, Input, PageLoader, StatusBadge, Tabs, Badge } from "../../components/ui";
 import { CampaignTimeline } from "../../components/CampaignTimeline";
 import { Thread } from "../../components/Thread";
@@ -42,6 +43,7 @@ interface Creative {
   id: string;
   current_version: number;
   status: string;
+  drive_links: string | null;
 }
 
 interface CreativeVersion {
@@ -64,6 +66,7 @@ export function AdvCampaignDetailPage() {
   const [file, setFile] = useState<File | null>(null);
   const [comment, setComment] = useState("");
   const [error, setError] = useState("");
+  const [linksText, setLinksText] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["adv", "campaign", id],
@@ -105,6 +108,33 @@ export function AdvCampaignDetailPage() {
     },
     onError: (e) => setError(apiErrorMessage(e)),
   });
+
+  const addLinks = useMutation({
+    mutationFn: async () => {
+      const links = linksText
+        .split(/[\s,]+/)
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("http"));
+      if (links.length === 0) throw new Error("Paste at least one valid link (https://…).");
+      await api.post(`/api/creatives/booking/${firstBooking!.id}/links`, { links });
+    },
+    onSuccess: () => {
+      setLinksText("");
+      qc.invalidateQueries({ queryKey: ["creative", firstBooking?.id] });
+    },
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  const driveLinks = useMemo(() => {
+    const raw = creativeData?.creative?.drive_links;
+    if (!raw) return [] as string[];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : ([] as string[]);
+    } catch {
+      return [] as string[];
+    }
+  }, [creativeData?.creative?.drive_links]);
 
   if (isLoading) return <PageLoader />;
   if (!data) return <EmptyState title="Campaign not found" />;
@@ -244,6 +274,25 @@ export function AdvCampaignDetailPage() {
                 ))}
               </div>
             )}
+            {driveLinks.length > 0 && (
+              <div className="border-t border-ink-100 px-5 py-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Video links (submitted to publisher)</p>
+                <div className="flex flex-wrap gap-2">
+                  {driveLinks.map((l, i) => (
+                    <a key={i} href={l} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-100">
+                      <Link2 className="h-3.5 w-3.5" /> Video link {i + 1}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="border-t border-ink-100 px-5 py-4">
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">Add video / Google Drive links</p>
+              <div className="flex gap-2">
+                <Input value={linksText} onChange={(e) => setLinksText(e.target.value)} placeholder="https://drive.google.com/… (space or comma separated)" className="flex-1" />
+                <Button size="sm" variant="outline" loading={addLinks.isPending} onClick={() => addLinks.mutate()}>Add links</Button>
+              </div>
+            </div>
           </Card>
           <Card>
             <CardHeader title="Approval status" subtitle="The agency reviews creatives before they go to the publisher" />

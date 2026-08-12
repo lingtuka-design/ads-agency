@@ -1,12 +1,13 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowLeft, CreditCard, XCircle, Upload } from "lucide-react";
+import { ArrowLeft, CreditCard, XCircle, Upload, CalendarClock } from "lucide-react";
 import { api, uploadFile } from "../../lib/api";
 import { apiErrorMessage, formatMoney } from "../../lib/utils";
 import { Button, Card, CardBody, CardHeader, Dialog, EmptyState, PageLoader, StatusBadge, Badge } from "../../components/ui";
 import { CampaignTimeline } from "../../components/CampaignTimeline";
 import { Thread } from "../../components/Thread";
+import { PublicationCalendar } from "../../components/PublicationCalendar";
 
 interface BookingDetail {
   id: string;
@@ -74,7 +75,19 @@ export function AdvBookingDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink-900">{b.package_title}</h1>
           <p className="mt-1 text-sm text-ink-500">{b.publisher_name} · {b.campaign_name}</p>
-          <div className="mt-2 flex gap-2"><StatusBadge status={b.status} /><Badge tone="blue">{b.platform}</Badge></div>
+          <div className="mt-2 flex gap-2">
+            <StatusBadge status={b.status} />
+            <Badge tone="blue">{b.platform}</Badge>
+            {b.status === "LIVE" && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                Your ad is running now
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-2">
           {["PAID", "DRAFT", "PENDING_PAYMENT"].includes(b.status) && (
@@ -89,6 +102,17 @@ export function AdvBookingDetailPage() {
           )}
         </div>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Publication dates"
+          subtitle="Request the dates you want your ad displayed — the publisher approves or adjusts them on this calendar."
+          action={<CalendarClock className="h-4 w-4 text-ink-300" />}
+        />
+        <CardBody>
+          <PublicationCalendar bookingId={b.id} role="advertiser" />
+        </CardBody>
+      </Card>
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card>

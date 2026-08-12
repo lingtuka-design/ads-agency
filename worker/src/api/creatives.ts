@@ -143,6 +143,44 @@ creativeRoutes.post("/booking/:id/status", async (c) => {
   return c.json({ ok: true });
 });
 
+creativeRoutes.post("/booking/:id/links", async (c) => {
+  const user = me(c);
+  const booking = await loadBooking(c.env, idParam(c));
+  if (!booking) throw new ApiError(404, "BOOKING_NOT_FOUND", "Booking not found.");
+  requireBookingActor(user, booking);
+  const input = await jsonBody(
+    z.object({ links: z.array(z.string().max(1000)).max(20), replace: z.boolean().optional() }),
+    c,
+  );
+  let creative = await c.env.DB.prepare(`SELECT id, drive_links FROM creatives WHERE booking_id = ?`)
+    .bind(booking.id)
+    .first<{ id: string; drive_links: string | null }>();
+  const ts = nowIso();
+  if (!creative) {
+    const id = crypto.randomUUID();
+    await c.env.DB.prepare(
+      `INSERT INTO creatives (id, booking_id, current_version, status, drive_links, created_at, updated_at)
+       VALUES (?, ?, 0, 'UPLOADED', ?, ?, ?)`,
+    )
+      .bind(id, booking.id, JSON.stringify(input.links), ts, ts)
+      .run();
+    creative = { id, drive_links: null };
+  } else {
+    let existing: string[] = [];
+    try {
+      existing = creative.drive_links ? JSON.parse(creative.drive_links) : [];
+    } catch {
+      existing = [];
+    }
+    const merged = input.replace ? input.links : [...existing, ...input.links.filter((l) => !existing.includes(l))];
+    await c.env.DB.prepare(`UPDATE creatives SET drive_links = ?, updated_at = ? WHERE id = ?`)
+      .bind(JSON.stringify(merged), ts, creative.id)
+      .run();
+  }
+  await audit(c.env, { user_id: user.id, action: "CREATIVE_LINKS", entity: "booking", entity_id: booking.id, new_value: JSON.stringify(input.links) });
+  return c.json({ ok: true, count: input.links.length });
+});
+
 // ---------- Creative jobs (Creative Studio / design requests) ----------
 
 creativeRoutes.get("/jobs", async (c) => {

@@ -7,6 +7,7 @@ import { jsonBody, me, idParam } from "./helpers";
 import type { AppBindings } from "./helpers";
 import { notify } from "../services/notifications";
 import { loadBooking } from "../services/bookings";
+import type { SessionUser } from "../env";
 import { getProvider } from "../services/payments";
 
 const favoriteSchema = z.object({
@@ -233,14 +234,38 @@ uploadRoutes.post("/", async (c) => {
 
 uploadRoutes.get("/:key{.*}", async (c) => {
   const key = c.req.param("key");
-  // Ownership check: private files must not be publicly guessable (spec Â§52)
-  const user = c.get("user") as { id: string } | undefined;
+  const user = c.get("user") as SessionUser | undefined;
   if (user) {
     const row = await c.env.DB.prepare(`SELECT owner_id FROM uploads WHERE key = ?`)
       .bind(key)
       .first<{ owner_id: string }>();
     if (row && row.owner_id !== user.id) {
-      throw new ApiError(403, "FORBIDDEN", "You do not have access to this file.");
+      // Booking parties (advertiser/publisher) and admins may access creatives
+      const party = await c.env.DB.prepare(
+        `SELECT b.id FROM creative_versions cv
+         JOIN creatives cr ON cr.id = cv.creative_id
+         JOIN bookings b ON b.id = cr.booking_id
+         WHERE cv.file_url LIKE ?`,
+      )
+        .bind(`%${key}%`)
+        .first<{ id: string }>();
+      if (!party) {
+        const viaLinks = await c.env.DB.prepare(
+          `SELECT b.id FROM creatives cr JOIN bookings b ON b.id = cr.booking_id
+           WHERE cr.drive_links LIKE ?`,
+        )
+          .bind(`%${key}%`)
+          .first<{ id: string }>();
+        const bookingParty = party ?? viaLinks;
+        if (!bookingParty) throw new ApiError(403, "FORBIDDEN", "You do not have access to this file.");
+        const booking = await loadBooking(c.env, bookingParty.id);
+        if (!booking) throw new ApiError(403, "FORBIDDEN", "You do not have access to this file.");
+        const allowed =
+          user.role === "admin" ||
+          (user.role === "advertiser" && booking.advertiser_id === user.advertiserId) ||
+          (user.role === "publisher" && booking.publisher_id === user.publisherId);
+        if (!allowed) throw new ApiError(403, "FORBIDDEN", "You do not have access to this file.");
+      }
     }
   } else {
     throw new ApiError(401, "UNAUTHORIZED", "Please log in to access this file.");
