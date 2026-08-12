@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, CreditCard, Upload, CheckCircle2 } from "lucide-react";
+import { CalendarCheck, Upload, CheckCircle2 } from "lucide-react";
 import { api, uploadFile } from "../lib/api";
 import { apiErrorMessage, formatMoney } from "../lib/utils";
 import { Button, Dialog, Field, Input, Textarea, ProgressBar } from "./ui";
@@ -21,15 +21,13 @@ interface BookingModalProps {
   defaultDates?: { start: string; end: string };
 }
 
-const STEPS = ["Campaign", "Creative", "Payment"];
-
 export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalProps) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
-  const [paymentRef, setPaymentRef] = useState("");
-  const [bookingIds, setBookingIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [bookingId, setBookingId] = useState<string>("");
 
   const [form, setForm] = useState({
     name: "",
@@ -46,8 +44,18 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const createBooking = useMutation({
-    mutationFn: async () => {
+  async function submitBooking() {
+    setError("");
+    if (!form.start || !form.end || form.start > form.end) {
+      setError("Please choose valid campaign dates.");
+      return;
+    }
+    setLoading(true);
+    try {
+      if (file) {
+        await uploadFile(file, setUploadPct);
+      }
+      // 1. Create booking
       const res = await api.post<{ bookings: { booking_id: string }[] }>("/api/bookings", {
         campaign: {
           name: form.name || `Campaign — ${pkg.title}`,
@@ -60,79 +68,27 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
         package_ids: [pkg.id],
         instructions: form.instructions || null,
       });
-      setBookingIds(res.bookings.map((b) => b.booking_id));
-      return res;
-    },
-    onError: (e) => setError(apiErrorMessage(e)),
-  });
+      const ids = res.bookings.map((b) => b.booking_id);
+      if (ids.length > 0) setBookingId(ids[0]);
 
-  const checkout = useMutation({
-    mutationFn: async () => {
-      const res = await api.post<{ amount: number; client_payload: { ref: string } }>("/api/payments/checkout", {
-        booking_ids: bookingIds,
-        method: "UPI",
+      // 2. Auto-confirm booking (no payment required)
+      const chk = await api.post<{ client_payload: { ref: string } }>("/api/payments/checkout", {
+        booking_ids: ids,
+        method: "MANUAL",
       });
-      setPaymentRef(res.client_payload.ref);
-      return res;
-    },
-    onError: (e) => setError(apiErrorMessage(e)),
-  });
+      await api.post("/api/payments/confirm", { ref: chk.client_payload.ref });
 
-  const confirm = useMutation({
-    mutationFn: async () => {
-      const res = await api.post<{ ok: boolean }>("/api/payments/confirm", { ref: paymentRef });
-      return res;
-    },
-    onSuccess: async () => {
       await qc.invalidateQueries();
-      setStep(3);
-    },
-    onError: (e) => setError(apiErrorMessage(e)),
-  });
-
-  async function next() {
-    setError("");
-    if (step === 0) {
-      if (!form.start || !form.end || form.start > form.end) {
-        setError("Please choose valid campaign dates.");
-        return;
-      }
-      if (file) {
-        try {
-          await uploadFile(file, setUploadPct);
-        } catch (e) {
-          setError(apiErrorMessage(e));
-          return;
-        }
-      }
-      const res = await createBooking.mutateAsync().catch((e) => { setError(apiErrorMessage(e)); return null; });
-      if (!res) return;
       setStep(1);
-    } else if (step === 1) {
-      const res = await checkout.mutateAsync().catch((e) => { setError(apiErrorMessage(e)); return null; });
-      if (!res) return;
-      setStep(2);
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={`Book — ${pkg.title}`} wide>
-      <div className="mb-6">
-        <div className="flex items-center gap-1">
-          {STEPS.map((s, i) => (
-            <div key={s} className="flex flex-1 items-center gap-1">
-              <div className={`flex items-center gap-2`}>
-                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${i < step ? "bg-emerald-500 text-white" : i === step ? "bg-brand-600 text-white" : "bg-ink-100 text-ink-400"}`}>
-                  {i < step ? "✓" : i + 1}
-                </span>
-                <span className={`text-xs font-medium ${i <= step ? "text-ink-900" : "text-ink-400"}`}>{s}</span>
-              </div>
-              {i < STEPS.length - 1 && <div className="mx-1 h-px flex-1 bg-ink-200" />}
-            </div>
-          ))}
-        </div>
-      </div>
-
+    <Dialog open={open} onClose={onClose} title={step === 0 ? `Book Ad Package — ${pkg.title}` : "Booking Status"} wide>
       {step === 0 && (
         <div className="space-y-4">
           <div className="rounded-xl bg-ink-50 p-4 text-sm">
@@ -178,56 +134,33 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
             </label>
             {uploadPct > 0 && uploadPct < 100 && <ProgressBar value={uploadPct} max={100} />}
           </Field>
+
+          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+          <div className="mt-6 flex justify-end gap-3 border-t border-ink-100 pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button loading={loading} onClick={submitBooking} icon={<CalendarCheck className="h-4 w-4" />}>
+              Confirm Booking
+            </Button>
+          </div>
         </div>
       )}
 
       {step === 1 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white p-4">
-            <CalendarCheck className="h-8 w-8 text-brand-600" />
-            <div className="text-sm">
-              <p className="font-semibold text-ink-900">Booking created — {bookingIds.length} item(s)</p>
-              <p className="text-ink-500">Your slots are now reserved for the next 30 minutes. Complete payment to confirm.</p>
-            </div>
-          </div>
-          <div className="rounded-xl bg-ink-50 p-4 text-sm">
-            <div className="flex justify-between"><span className="text-ink-500">Package</span><span className="font-semibold">{pkg.title}</span></div>
-            <div className="mt-1.5 flex justify-between"><span className="text-ink-500">Amount (incl. agency fees)</span><span className="font-bold">{formatMoney(pkg.price)}</span></div>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white p-4">
-            <CreditCard className="h-8 w-8 text-brand-600" />
-            <div className="text-sm">
-              <p className="font-semibold text-ink-900">Payment via UPI (test gateway)</p>
-              <p className="text-ink-500">In production this connects to a payment provider (Razorpay) with server-side verification.</p>
-            </div>
-          </div>
-          {checkout.data && (
-            <div className="rounded-xl bg-ink-50 p-4 text-center">
-              <p className="text-xs uppercase tracking-wide text-ink-400">Payment reference</p>
-              <p className="mt-1 font-mono text-lg font-bold text-ink-900">{paymentRef}</p>
-              <p className="mt-1 text-xs text-ink-500">Confirm payment to simulate the gateway returning a successful payment.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {step === 3 && (
         <div className="flex flex-col items-center gap-4 py-6 text-center">
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <CheckCircle2 className="h-9 w-9 text-emerald-600" />
           </span>
           <div>
-            <h3 className="text-lg font-bold text-ink-900">Payment successful!</h3>
+            <h3 className="text-lg font-bold text-ink-900">Booking Confirmed!</h3>
             <p className="mt-1 text-sm text-ink-500">
-              Your booking is confirmed, an invoice has been issued, and the publisher has been notified.
+              Your booking for <strong className="text-ink-800">{pkg.title}</strong> has been submitted. No payment is required at this stage.
             </p>
+            {bookingId && <p className="mt-2 font-mono text-xs text-ink-400">Ref ID: {bookingId}</p>}
           </div>
-          <div className="flex gap-3">
+          <div className="mt-4 flex gap-3">
             <Button variant="outline" onClick={onClose}>Close</Button>
             <Button
               onClick={() => {
@@ -238,27 +171,6 @@ export function BookingModal({ open, onClose, pkg, defaultDates }: BookingModalP
               View Campaigns
             </Button>
           </div>
-        </div>
-      )}
-
-      {error && <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-      {step < 3 && (
-        <div className="mt-6 flex justify-end gap-3 border-t border-ink-100 pt-4">
-          {step > 0 && (
-            <Button variant="outline" onClick={() => { setStep(step - 1); setError(""); }}>
-              Back
-            </Button>
-          )}
-          {step === 2 ? (
-            <Button loading={confirm.isPending} onClick={() => confirm.mutate()} icon={<CreditCard className="h-4 w-4" />}>
-              Confirm Payment
-            </Button>
-          ) : (
-            <Button loading={createBooking.isPending || checkout.isPending} onClick={next} icon={<CalendarCheck className="h-4 w-4" />}>
-              {step === 0 ? "Continue to Payment" : "Proceed to Payment"}
-            </Button>
-          )}
         </div>
       )}
     </Dialog>
