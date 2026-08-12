@@ -8,6 +8,7 @@ import {
 import { api } from "../lib/api";
 import { apiErrorMessage, formatDate, formatNumber } from "../lib/utils";
 import { Badge, Button, Card, CardBody, CardHeader, PageLoader, VerifyBadge, EmptyState } from "../components/ui";
+import { BookConfirm } from "../components/BookConfirm";
 import { useAuth } from "../lib/auth";
 import { cn } from "../lib/utils";
 
@@ -69,6 +70,7 @@ export function PublisherProfilePage() {
   const { isAdvertiser } = useAuth();
   const qc = useQueryClient();
   const [error, setError] = useState("");
+  const [confirmPkg, setConfirmPkg] = useState<Pkg | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["publisher", slug],
@@ -199,11 +201,14 @@ export function PublisherProfilePage() {
                 </div>
                 <div className="mt-4 flex-1" />
                 {isAdvertiser ? (
-                  <Link to="/advertiser/publishers" search={{ pkg: pkg.id }}>
-                    <Button className="w-full" disabled={soldOut} variant={soldOut ? "outline" : "primary"}>
-                      {soldOut ? "Sold Out" : "Book Now"}
-                    </Button>
-                  </Link>
+                  <Button
+                    className="w-full"
+                    disabled={soldOut}
+                    variant={soldOut ? "outline" : "primary"}
+                    onClick={() => setConfirmPkg(pkg)}
+                  >
+                    {soldOut ? "Sold Out" : "Book Now"}
+                  </Button>
                 ) : (
                   <a
                     href={`/login?redirect=${encodeURIComponent(`/advertiser/publishers?pkg=${pkg.id}`)}`}
@@ -258,6 +263,21 @@ export function PublisherProfilePage() {
         <Sparkles className="h-4 w-4" /> Managed end-to-end by the agency — payment, creative, approval and proof of publication.
       </p>
       {error && <p className="mt-3 text-center text-sm text-red-600">{error}</p>}
+
+      <BookConfirm
+        open={!!confirmPkg}
+        pkg={confirmPkg}
+        onConfirm={() => {
+          const target = confirmPkg;
+          setConfirmPkg(null);
+          if (target) navigateToBooking(target.id);
+        }}
+        onCancel={() => setConfirmPkg(null)}
+      />
     </div>
   );
+}
+
+function navigateToBooking(packageId: string) {
+  window.location.href = `/advertiser/publishers?pkg=${packageId}`;
 }

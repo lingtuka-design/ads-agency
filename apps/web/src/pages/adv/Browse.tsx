@@ -6,6 +6,7 @@ import { api } from "../../lib/api";
 import { formatNumber } from "../../lib/utils";
 import { Badge, Button, Card, EmptyState, Input, PageLoader, Pagination, Select, VerifyBadge } from "../../components/ui";
 import { BookingModal } from "../../components/BookingModal";
+import { BookConfirm } from "../../components/BookConfirm";
 import { cn } from "../../lib/utils";
 
 interface PublisherItem {
@@ -78,6 +79,8 @@ export function AdvBrowsePage() {
       setPendingPkgId(null);
     }
   }, [pendingPkgId, packages]);
+
+  const [confirmPkg, setConfirmPkg] = useState<Pkg | null>(null);
 
   return (
     <div className="space-y-6">
@@ -154,7 +157,7 @@ export function AdvBrowsePage() {
                   <p className="text-xs text-ink-400">{p.publisher_name} · {p.duration_days} days</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-lg font-bold text-ink-900">₹{p.price.toLocaleString("en-IN")}</span>
-                    <Button size="sm" icon={<CalendarCheck className="h-4 w-4" />} disabled={p.available_slots <= 0} onClick={() => setBookPkg(p)}>
+                    <Button size="sm" icon={<CalendarCheck className="h-4 w-4" />} disabled={p.available_slots <= 0} onClick={() => setConfirmPkg(p)}>
                       Book Now
                     </Button>
                   </div>
@@ -176,6 +179,16 @@ export function AdvBrowsePage() {
           pkg={bookPkg}
         />
       )}
+
+      <BookConfirm
+        open={!!confirmPkg}
+        pkg={confirmPkg}
+        onConfirm={() => {
+          setBookPkg(confirmPkg);
+          setConfirmPkg(null);
+        }}
+        onCancel={() => setConfirmPkg(null)}
+      />
     </div>
   );
 }
