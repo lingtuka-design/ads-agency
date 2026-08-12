@@ -64,16 +64,18 @@ export function AdvBrowsePage() {
 
   const { data: packages } = useQuery({
     queryKey: ["adv-packages-all"],
-    queryFn: () => api.get<Pkg[]>(`/api/public/packages?pageSize=100`),
+    queryFn: () => api.get<{ items: Pkg[]; total: number }>(`/api/public/packages?pageSize=100`),
   });
+
+  const packageList: Pkg[] = packages?.items ?? [];
 
   // Auto-open the booking modal when arriving with ?pkg=<id> (e.g. "Book Now" on a publisher profile)
   const [pendingPkgId, setPendingPkgId] = useState<string | null>(
     typeof search.pkg === "string" ? search.pkg : null,
   );
   useEffect(() => {
-    if (!pendingPkgId || !packages) return;
-    const found = (Array.isArray(packages) ? packages : []).find((p) => p.id === pendingPkgId);
+    if (!pendingPkgId || !packages?.items) return;
+    const found = packages.items.find((p) => p.id === pendingPkgId);
     if (found) {
       setBookPkg(found);
       setPendingPkgId(null);
@@ -145,7 +147,7 @@ export function AdvBrowsePage() {
             <h2 className="text-lg font-bold text-ink-900">Available packages right now</h2>
             <p className="mt-1 text-sm text-ink-500">Live inventory — book directly without contacting the publisher.</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {(Array.isArray(packages) ? packages : []).slice(0, 6).map((p) => (
+              {packageList.slice(0, 6).map((p) => (
                 <Card key={p.id} className={cn("flex flex-col p-5", p.available_slots <= 0 && "opacity-60")}>
                   <div className="flex items-center justify-between">
                     <Badge tone="blue">{p.platform}</Badge>
