@@ -16,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "ad-agency-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "48a9d2fe-4c85-479b-8b51-9b11611e326a",
       "migrations_dir": "migrations"
     }
   ],
@@ -29,7 +29,7 @@
   "kv_namespaces": [
     {
       "binding": "KV",
-      "id": "00000000-0000-0000-0000-000000000000"
+      "id": "575aabaa31d645d0912a988cd4c86de8"
     }
   ],
   "vars": {
@@ -37,11 +37,6 @@
     "AUDIT_ENABLED": "true"
   },
   "triggers": {
-    "crons": [
-      {
-        "cron": "*/15 * * * *",
-        "description": "Release expired booking reservations (spec §72)"
-      }
-    ]
+    "crons": ["*/15 * * * *"]
   }
 }
