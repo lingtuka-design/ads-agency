@@ -13,9 +13,15 @@ export class ApiError extends Error {
 }
 
 export function errorBody(err: unknown) {
-  if (err instanceof ApiError) {
+  if (err && typeof err === "object" && "code" in err && "message" in err) {
+    const e = err as { code: string; message: string; details?: unknown };
     return {
-      error: { code: err.code, message: err.message, details: err.details },
+      error: { code: e.code, message: e.message, details: e.details },
+    };
+  }
+  if (err instanceof Error) {
+    return {
+      error: { code: "INTERNAL_ERROR", message: err.message },
     };
   }
   return {

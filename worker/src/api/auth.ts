@@ -90,30 +90,11 @@ authRoutes.post("/login", async (c) => {
   const input = await jsonBody(loginSchema, c);
   const inputEmail = input.email.trim().toLowerCase();
 
-  // Auto-bootstrap admin user from environment secrets if logging in as bootstrap admin username
   const bootstrapUsername = c.env.ADMIN_BOOTSTRAP_USERNAME?.trim().toLowerCase();
   const bootstrapPassword = c.env.ADMIN_BOOTSTRAP_PASSWORD;
 
-  if (bootstrapUsername && inputEmail === bootstrapUsername) {
-    const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`).bind(bootstrapUsername).first();
-    if (!existing && bootstrapPassword) {
-      const passwordHash = await hashPassword(bootstrapPassword);
-      const adminId = crypto.randomUUID();
-      const ts = new Date().toISOString();
-      await c.env.DB.batch([
-        c.env.DB.prepare(
-          `INSERT INTO users (id, email, password_hash, name, role, account_status, must_change_password, created_at, updated_at)
-           VALUES (?, ?, ?, 'Agency Admin', 'admin', 'ACTIVE', 0, ?, ?)`,
-        ).bind(adminId, bootstrapUsername, passwordHash, ts, ts),
-        c.env.DB.prepare(
-          `INSERT INTO staff (id, user_id, staff_role, title, active, created_at) VALUES (?, ?, 'SUPER_ADMIN', 'Super Admin', 1, ?)`,
-        ).bind(crypto.randomUUID(), adminId, ts),
-      ]);
-    }
-  }
-
   const user = await c.env.DB.prepare(
-    `SELECT id, email, password_hash, name, role, account_status, must_change_password FROM users WHERE email = ?`,
+    `SELECT id, email, password_hash, name, role, account_status, must_change_password FROM users WHERE LOWER(email) = ?`,
   )
     .bind(inputEmail)
     .first<{

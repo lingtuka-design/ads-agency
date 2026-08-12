@@ -3,7 +3,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { Env, SessionUser, AppVariables } from "./env";
 import { ApiError, randomToken, sha256Hex } from "./utils";
 
-const PBKDF2_ITERATIONS = 210_000;
+const PBKDF2_ITERATIONS = 100_000;
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30 days
 
 export async function hashPassword(password: string): Promise<string> {
@@ -24,7 +24,7 @@ export async function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.split(":");
   if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
-  const iterations = parseInt(parts[1], 10);
+  const iterations = Math.min(100_000, parseInt(parts[1], 10) || 100_000);
   const salt = hexToBytes(parts[2]);
   const expected = parts[3];
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, [
