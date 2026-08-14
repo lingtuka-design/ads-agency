@@ -27,10 +27,21 @@
 
 html {
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+  scroll-behavior: auto; /* native instant scroll to eliminate stutter/lag */
 }
 
 body {
   @apply bg-ink-50 text-ink-900 font-sans;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hardware accelerated layer */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 *:focus-visible {
@@ -47,11 +58,20 @@ body {
   @apply animate-pulse rounded-lg bg-ink-200/70;
 }
 
+.scrollbar-thin {
+  -webkit-overflow-scrolling: touch;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--color-ink-300);
   border-radius: 999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
 }
